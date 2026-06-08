@@ -1,13 +1,14 @@
 import os
 import sys
 import tkinter as tk
+import winreg
 from tkinter import filedialog, messagebox
 
 class FileRenamerApp:
     def __init__(self, root, initial_folder=None):
         self.root = root
         self.root.title("파일 일괄 이름 변경 도구")
-        self.root.geometry("550x500")
+        self.root.geometry("550x560")
         self.root.resizable(False, False)
         
         self.target_folder = tk.StringVar()
@@ -50,7 +51,22 @@ class FileRenamerApp:
         
         tk.Button(frame_batch, text="일괄 변경 실행", command=self.apply_batch_rename).grid(row=1, column=0, columnspan=2, pady=10)
 
-        # 4. 로그/결과 출력 영역
+        # 4. Windows 우클릭 메뉴 등록 영역
+        frame_context = tk.LabelFrame(self.root, text="4. Windows 우클릭 메뉴 등록", padx=10, pady=10)
+        frame_context.pack(fill="x", padx=10, pady=5)
+
+        tk.Button(
+            frame_context,
+            text="우클릭 메뉴에 등록",
+            command=self.register_context_menu,
+        ).pack(side="left", padx=5)
+        tk.Button(
+            frame_context,
+            text="우클릭 메뉴에서 제거",
+            command=self.unregister_context_menu,
+        ).pack(side="left", padx=5)
+
+        # 5. 로그/결과 출력 영역
         frame_log = tk.LabelFrame(self.root, text="실행 결과 로그", padx=10, pady=10)
         frame_log.pack(fill="both", expand=True, padx=10, pady=5)
         
@@ -145,6 +161,73 @@ class FileRenamerApp:
                 self.log_message(f"실패 ({filename}): {e}")
                 
         messagebox.showinfo("완료", f"총 {changed_count}개의 파일 이름이 일괄 변경되었다.")
+
+    def get_context_menu_command(self, folder_arg):
+        """현재 실행 환경에 맞는 우클릭 메뉴 실행 명령을 반환하는 함수"""
+        if getattr(sys, "frozen", False):
+            app_path = sys.executable
+            return f'"{app_path}" "{folder_arg}"'
+
+        script_path = os.path.abspath(__file__)
+        python_exe = sys.executable
+        if os.path.basename(python_exe).lower() == "python.exe":
+            pythonw_exe = os.path.join(os.path.dirname(python_exe), "pythonw.exe")
+            if os.path.exists(pythonw_exe):
+                python_exe = pythonw_exe
+
+        return f'"{python_exe}" "{script_path}" "{folder_arg}"'
+
+    def set_registry_default_value(self, key_path, value):
+        """HKCU 레지스트리 키의 기본값을 설정하는 함수"""
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, key_path) as key:
+            winreg.SetValueEx(key, "", 0, winreg.REG_SZ, value)
+
+    def register_context_menu(self):
+        """Windows 탐색기 폴더 우클릭 메뉴에 프로그램을 등록하는 함수"""
+        menu_text = "일괄 파일명 변경 프로그램 열기"
+        background_shell = r"Software\Classes\Directory\Background\shell\FileRenamer"
+        background_command = background_shell + r"\command"
+        folder_shell = r"Software\Classes\Directory\shell\FileRenamer"
+        folder_command = folder_shell + r"\command"
+
+        try:
+            self.set_registry_default_value(background_shell, menu_text)
+            self.set_registry_default_value(background_command, self.get_context_menu_command("%V"))
+            self.set_registry_default_value(folder_shell, menu_text)
+            self.set_registry_default_value(folder_command, self.get_context_menu_command("%1"))
+        except OSError as e:
+            messagebox.showerror("오류", f"우클릭 메뉴 등록 중 오류가 발생하였다: {e}")
+            self.log_message(f"우클릭 메뉴 등록 실패: {e}")
+            return
+
+        self.log_message("우클릭 메뉴 등록 완료")
+        messagebox.showinfo("완료", "Windows 우클릭 메뉴에 등록되었다.")
+
+    def unregister_context_menu(self):
+        """Windows 탐색기 폴더 우클릭 메뉴에서 프로그램을 제거하는 함수"""
+        registry_paths = [
+            r"Software\Classes\Directory\Background\shell\FileRenamer\command",
+            r"Software\Classes\Directory\Background\shell\FileRenamer",
+            r"Software\Classes\Directory\shell\FileRenamer\command",
+            r"Software\Classes\Directory\shell\FileRenamer",
+        ]
+
+        failed_paths = []
+        for path in registry_paths:
+            try:
+                winreg.DeleteKey(winreg.HKEY_CURRENT_USER, path)
+            except FileNotFoundError:
+                continue
+            except OSError:
+                failed_paths.append(path)
+
+        if failed_paths:
+            messagebox.showwarning("알림", "일부 우클릭 메뉴 항목을 제거하지 못하였다.")
+            self.log_message(f"우클릭 메뉴 일부 제거 실패: {', '.join(failed_paths)}")
+            return
+
+        self.log_message("우클릭 메뉴 제거 완료")
+        messagebox.showinfo("완료", "Windows 우클릭 메뉴에서 제거되었다.")
 
 if __name__ == "__main__":
     initial_folder = sys.argv[1] if len(sys.argv) > 1 else None

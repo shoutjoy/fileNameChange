@@ -8,6 +8,8 @@ Windows용 파일 일괄 이름 변경 도구입니다. 선택한 폴더 안의 
 - 기존 파일명 앞뒤에 접두사, 접미사 추가
 - `기본이름_001`, `기본이름_002` 형식으로 번호를 붙여 일괄 변경
 - Windows 폴더 우클릭 메뉴에서 바로 실행 가능
+- 프로그램 안에서 우클릭 메뉴 등록 및 제거 가능
+- GitHub Actions로 Windows 실행 파일 자동 빌드 가능
 
 ## 파일 구성
 
@@ -16,12 +18,13 @@ Windows용 파일 일괄 이름 변경 도구입니다. 선택한 폴더 안의 
 - `FileRenamer.spec`: PyInstaller 빌드 설정 파일
 - `install_context_menu.ps1`: Windows 우클릭 메뉴 등록 스크립트
 - `code_artifact.bat`: 우클릭 메뉴 등록 스크립트를 실행하는 배치 파일
+- `.github/workflows/build.yml`: GitHub Actions 빌드 워크플로
 
 ## 사용 방법
 
 ### 1. 실행 파일로 실행
 
-`dist` 폴더 안의 `FileRenamer.exe`를 실행합니다.
+[FileRenamer.exe](dist/FileRenamer.exe?raw=1)를 다운로드하거나 `dist` 폴더 안의 `FileRenamer.exe`를 실행합니다.
 
 프로그램이 열리면 다음 순서로 사용합니다.
 
@@ -58,15 +61,19 @@ Windows용 파일 일괄 이름 변경 도구입니다. 선택한 폴더 안의 
 
 ## 우클릭 메뉴 등록
 
-Windows 탐색기에서 폴더를 우클릭했을 때 이 프로그램을 바로 실행하려면 `code_artifact.bat` 파일을 실행합니다.
+Windows 탐색기에서 폴더를 우클릭했을 때 이 프로그램을 바로 실행하려면 프로그램 안의 `우클릭 메뉴에 등록` 버튼을 누릅니다.
 
-실행 후 폴더 또는 폴더 빈 공간을 우클릭하면 다음 메뉴가 추가됩니다.
+등록 후 폴더 또는 폴더 빈 공간을 우클릭하면 다음 메뉴가 추가됩니다.
 
 ```text
 일괄 파일명 변경 프로그램 열기
 ```
 
 이 메뉴로 실행하면 선택한 폴더 경로가 프로그램에 자동으로 입력됩니다.
+
+우클릭 메뉴를 삭제하려면 프로그램 안의 `우클릭 메뉴에서 제거` 버튼을 누릅니다.
+
+기존 방식대로 `code_artifact.bat` 파일을 실행해도 우클릭 메뉴를 등록할 수 있습니다.
 
 ## Python으로 직접 실행
 
@@ -91,6 +98,29 @@ pyinstaller FileRenamer.spec
 ```
 
 빌드가 완료되면 `dist/FileRenamer.exe`가 생성됩니다.
+
+## GitHub Actions 빌드
+
+이 저장소에는 Windows 실행 파일을 자동으로 빌드하는 GitHub Actions 워크플로가 포함되어 있습니다.
+
+실행 조건:
+
+- `main` 또는 `master` 브랜치에 push
+- pull request 생성 또는 업데이트
+- GitHub Actions 화면에서 수동 실행
+
+수동 실행 방법:
+
+1. GitHub 저장소의 `Actions` 탭으로 이동합니다.
+2. `Build FileRenamer` 워크플로를 선택합니다.
+3. `Run workflow` 버튼을 눌러 실행합니다.
+4. 빌드가 끝나면 실행 결과 페이지의 `Artifacts` 영역에서 `FileRenamer-windows`를 다운로드합니다.
+
+업로드되는 파일:
+
+```text
+dist/FileRenamer.exe
+```
 
 ## 주의사항
 
