@@ -2,17 +2,18 @@ import os
 import sys
 import tkinter as tk
 import winreg
+from collections import Counter
 from tkinter import filedialog, messagebox
 
 class FileRenamerApp:
     def __init__(self, root, initial_folder=None):
         self.root = root
         self.root.title("파일 일괄 이름 변경 도구")
-        self.root.geometry("550x560")
+        self.root.geometry("620x600")
         self.root.resizable(False, False)
         
         self.target_folder = tk.StringVar()
-        self.include_subfolders = tk.BooleanVar(value=False)
+        self.include_subfolders = tk.BooleanVar(value=True)
         if initial_folder and os.path.isdir(initial_folder):
             self.target_folder.set(initial_folder)
         
@@ -24,14 +25,15 @@ class FileRenamerApp:
         # 1. 폴더 선택 영역
         frame_folder = tk.LabelFrame(self.root, text="1. 대상 폴더 선택", padx=10, pady=10)
         frame_folder.pack(fill="x", padx=10, pady=5)
+        frame_folder.columnconfigure(0, weight=1)
         
-        tk.Entry(frame_folder, textvariable=self.target_folder, state="readonly", width=50).pack(side="left", padx=5)
-        tk.Button(frame_folder, text="폴더 찾아보기", command=self.select_folder).pack(side="left")
+        tk.Entry(frame_folder, textvariable=self.target_folder, state="readonly").grid(row=0, column=0, sticky="ew", padx=(0, 8))
+        tk.Button(frame_folder, text="폴더 찾아보기", command=self.select_folder).grid(row=0, column=1, sticky="e")
         tk.Checkbutton(
             frame_folder,
             text="하위 폴더 포함",
             variable=self.include_subfolders,
-        ).pack(anchor="w", padx=5, pady=(8, 0))
+        ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(8, 0))
 
         # 2. 접두사/접미사 추가 영역
         frame_affix = tk.LabelFrame(self.root, text="2. 접두사(Prefix) / 접미사(Suffix) 추가", padx=10, pady=10)
@@ -102,7 +104,8 @@ class FileRenamerApp:
         
         try:
             files = []
-            if self.include_subfolders.get():
+            include_subfolders = self.include_subfolders.get()
+            if include_subfolders:
                 for current_folder, _, filenames in os.walk(folder):
                     for filename in filenames:
                         file_path = os.path.join(current_folder, filename)
@@ -116,6 +119,8 @@ class FileRenamerApp:
                 ]
 
             files.sort() # 일관성 있는 순서를 위해 정렬
+            scope_text = "하위 폴더 포함" if include_subfolders else "선택 폴더만"
+            self.log_message(f"대상 파일 {len(files)}개 발견 ({scope_text})")
             return folder, files
         except Exception as e:
             messagebox.showerror("오류", f"폴더를 읽는 중 오류가 발생하였다: {e}")
@@ -127,6 +132,76 @@ class FileRenamerApp:
             return os.path.relpath(file_path, folder)
         except ValueError:
             return file_path
+
+    def make_temp_path(self, file_path, index):
+        """같은 폴더 안에서 사용할 임시 파일 경로를 생성하는 함수"""
+        file_folder = os.path.dirname(file_path)
+        filename = os.path.basename(file_path)
+        temp_filename = f".filerename_tmp_{os.getpid()}_{index}_{filename}"
+        temp_path = os.path.join(file_folder, temp_filename)
+
+        suffix = 1
+        while os.path.exists(temp_path):
+            temp_filename = f".filerename_tmp_{os.getpid()}_{index}_{suffix}_{filename}"
+            temp_path = os.path.join(file_folder, temp_filename)
+            suffix += 1
+
+        return temp_path
+
+    def run_rename_operations(self, folder, operations, complete_message):
+        """파일명 변경을 임시 이름 변경 후 최종 이름 변경 방식으로 실행하는 함수"""
+        operations = [
+            (old_path, new_path)
+            for old_path, new_path in operations
+            if os.path.abspath(old_path) != os.path.abspath(new_path)
+        ]
+
+        if not operations:
+            messagebox.showinfo("알림", "변경할 파일이 없다.")
+            return
+
+        target_counts = Counter(os.path.abspath(new_path).lower() for _, new_path in operations)
+        duplicate_targets = {target for target, count in target_counts.items() if count > 1}
+        if duplicate_targets:
+            for old_path, new_path in operations:
+                if os.path.abspath(new_path).lower() in duplicate_targets:
+                    self.log_message(
+                        f"실패 ({self.display_file_path(folder, old_path)}): 같은 결과 파일명이 중복된다."
+                    )
+            messagebox.showwarning("알림", "같은 결과 파일명이 중복되어 변경을 중단하였다.")
+            return
+
+        temp_operations = []
+        changed_count = 0
+
+        for index, (old_path, new_path) in enumerate(operations, start=1):
+            temp_path = self.make_temp_path(old_path, index)
+            try:
+                os.rename(old_path, temp_path)
+                temp_operations.append((temp_path, new_path, old_path))
+            except Exception as e:
+                self.log_message(f"실패 ({self.display_file_path(folder, old_path)}): {e}")
+
+        for temp_path, new_path, old_path in temp_operations:
+            try:
+                os.rename(temp_path, new_path)
+                if not os.path.exists(new_path):
+                    raise OSError("최종 파일을 확인할 수 없다.")
+                old_display = self.display_file_path(folder, old_path)
+                new_display = self.display_file_path(folder, new_path)
+                self.log_message(f"변경: {old_display} -> {new_display}")
+                changed_count += 1
+            except Exception as e:
+                self.log_message(f"실패 ({self.display_file_path(folder, old_path)}): {e}")
+                try:
+                    os.rename(temp_path, old_path)
+                    self.log_message(f"복구: {self.display_file_path(folder, old_path)}")
+                except Exception as restore_error:
+                    self.log_message(
+                        f"복구 실패 ({self.display_file_path(folder, temp_path)}): {restore_error}"
+                    )
+
+        messagebox.showinfo("완료", complete_message.format(count=changed_count))
 
     def apply_affix(self):
         """접두사와 접미사를 기존 파일명에 추가하는 함수"""
@@ -141,26 +216,15 @@ class FileRenamerApp:
             messagebox.showinfo("알림", "접두사 또는 접미사를 입력해야 한다.")
             return
 
-        changed_count = 0
+        operations = []
         for file_path in files:
             file_folder = os.path.dirname(file_path)
             filename = os.path.basename(file_path)
             name, ext = os.path.splitext(filename)
             new_filename = f"{prefix}{name}{suffix}{ext}"
-            
-            old_path = file_path
-            new_path = os.path.join(file_folder, new_filename)
-            
-            try:
-                os.rename(old_path, new_path)
-                old_display = self.display_file_path(folder, old_path)
-                new_display = self.display_file_path(folder, new_path)
-                self.log_message(f"변경: {old_display} -> {new_display}")
-                changed_count += 1
-            except Exception as e:
-                self.log_message(f"실패 ({self.display_file_path(folder, old_path)}): {e}")
-        
-        messagebox.showinfo("완료", f"총 {changed_count}개의 파일 이름이 변경되었다.")
+            operations.append((file_path, os.path.join(file_folder, new_filename)))
+
+        self.run_rename_operations(folder, operations, "총 {count}개의 파일 이름이 변경되었다.")
 
     def apply_batch_rename(self):
         """사용자가 지정한 기본 이름과 일련번호(001, 002 등)로 파일명을 일괄 변경하는 함수"""
@@ -173,27 +237,16 @@ class FileRenamerApp:
             messagebox.showinfo("알림", "새로운 기본 파일명을 입력해야 한다.")
             return
 
-        changed_count = 0
+        operations = []
         for index, file_path in enumerate(files, start=1):
             file_folder = os.path.dirname(file_path)
             filename = os.path.basename(file_path)
             _, ext = os.path.splitext(filename)
             # 숫자는 3자리로 포맷팅 (예: 001, 002, 003...)
             new_filename = f"{base_name}_{index:03d}{ext}"
-            
-            old_path = file_path
-            new_path = os.path.join(file_folder, new_filename)
-            
-            try:
-                os.rename(old_path, new_path)
-                old_display = self.display_file_path(folder, old_path)
-                new_display = self.display_file_path(folder, new_path)
-                self.log_message(f"변경: {old_display} -> {new_display}")
-                changed_count += 1
-            except Exception as e:
-                self.log_message(f"실패 ({self.display_file_path(folder, old_path)}): {e}")
-                
-        messagebox.showinfo("완료", f"총 {changed_count}개의 파일 이름이 일괄 변경되었다.")
+            operations.append((file_path, os.path.join(file_folder, new_filename)))
+
+        self.run_rename_operations(folder, operations, "총 {count}개의 파일 이름이 일괄 변경되었다.")
 
     def get_context_menu_command(self, folder_arg):
         """현재 실행 환경에 맞는 우클릭 메뉴 실행 명령을 반환하는 함수"""
