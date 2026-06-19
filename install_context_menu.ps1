@@ -9,7 +9,7 @@ if (-not (Test-Path -LiteralPath $appExe -PathType Leaf)) {
     exit 1
 }
 
-$menuText = "일괄 파일명 변경 프로그램 열기"
+$menuText = "일괄 파일명 변경 및 폴더 생성 프로그램 열기"
 $backgroundShell = "HKCU:\Software\Classes\Directory\Background\shell\FileRenamer"
 $backgroundCommand = Join-Path $backgroundShell "command"
 $folderShell = "HKCU:\Software\Classes\Directory\shell\FileRenamer"
