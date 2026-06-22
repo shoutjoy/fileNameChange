@@ -9,7 +9,7 @@ class FileRenamerApp:
     def __init__(self, root, initial_folder=None):
         self.root = root
         self.root.title("일괄 파일명 변경 및 폴더 생성 도구")
-        self.root.geometry("620x720")
+        self.root.geometry("620x800")
         self.root.resizable(False, False)
         
         self.target_folder = tk.StringVar()
@@ -71,6 +71,20 @@ class FileRenamerApp:
         self.entry_suffix.grid(row=0, column=3, padx=5, pady=5)
         
         tk.Button(frame_affix, text="적용하기", command=self.apply_affix).grid(row=1, column=0, columnspan=4, pady=10)
+
+        # 특정 문자 변경 (치환) 영역
+        frame_replace = tk.LabelFrame(self.tab_rename, text="특정 문자 변경 (치환)", padx=10, pady=10)
+        frame_replace.pack(fill="x", padx=5, pady=5)
+        
+        tk.Label(frame_replace, text="찾을 문자열:").grid(row=0, column=0, sticky="w", pady=5)
+        self.entry_find = tk.Entry(frame_replace, width=20)
+        self.entry_find.grid(row=0, column=1, padx=5, pady=5)
+        
+        tk.Label(frame_replace, text="바꿀 문자열:").grid(row=0, column=2, sticky="w", pady=5)
+        self.entry_replace = tk.Entry(frame_replace, width=20)
+        self.entry_replace.grid(row=0, column=3, padx=5, pady=5)
+        
+        tk.Button(frame_replace, text="변경 실행", command=self.apply_replace_rename).grid(row=1, column=0, columnspan=4, pady=10)
 
         # 일괄 이름 변경 및 번호 부여 영역
         frame_batch = tk.LabelFrame(self.tab_rename, text="일괄 이름 변경 및 번호 매기기", padx=10, pady=10)
@@ -461,6 +475,47 @@ class FileRenamerApp:
                 folder_name = os.path.basename(folder_path)
                 new_folder_name = f"{prefix}{folder_name}{suffix}"
                 folder_operations.append((folder_path, os.path.join(parent_folder, new_folder_name)))
+
+            if folder_operations:
+                self.run_folder_rename_operations(folder, folder_operations, "총 {count}개의 폴더 이름이 변경되었다.")
+
+        if not file_operations and not self.include_folder_names.get():
+            messagebox.showinfo("알림", "변경할 파일이 없다.")
+
+    def apply_replace_rename(self):
+        """파일명에서 특정 문자열을 찾아 다른 문자열로 변경하는 함수"""
+        folder, files = self.get_files_in_folder()
+        if not folder:
+            return
+
+        old_text = self.entry_find.get()
+        new_text = self.entry_replace.get()
+
+        if not old_text:
+            messagebox.showinfo("알림", "찾을 문자열을 입력해야 한다.")
+            return
+
+        file_operations = []
+        for file_path in files:
+            file_folder = os.path.dirname(file_path)
+            filename = os.path.basename(file_path)
+            
+            if old_text in filename:
+                new_filename = filename.replace(old_text, new_text)
+                file_operations.append((file_path, os.path.join(file_folder, new_filename)))
+
+        if file_operations:
+            self.run_rename_operations(folder, file_operations, "총 {count}개의 파일 이름이 변경되었다.")
+
+        if self.include_folder_names.get():
+            folder_operations = []
+            folders = self.get_folders_in_folder(folder)
+            for folder_path in folders:
+                parent_folder = os.path.dirname(folder_path)
+                folder_name = os.path.basename(folder_path)
+                if old_text in folder_name:
+                    new_folder_name = folder_name.replace(old_text, new_text)
+                    folder_operations.append((folder_path, os.path.join(parent_folder, new_folder_name)))
 
             if folder_operations:
                 self.run_folder_rename_operations(folder, folder_operations, "총 {count}개의 폴더 이름이 변경되었다.")

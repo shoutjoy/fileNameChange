@@ -7,7 +7,7 @@ class FileRenamerApp:
     def __init__(self, root, initial_folder=None):
         self.root = root
         self.root.title("파일 일괄 이름 변경 도구")
-        self.root.geometry("550x500")
+        self.root.geometry("550x620")
         self.root.resizable(False, False)
         
         self.target_folder = tk.StringVar()
@@ -50,8 +50,22 @@ class FileRenamerApp:
         
         tk.Button(frame_batch, text="일괄 변경 실행", command=self.apply_batch_rename).grid(row=1, column=0, columnspan=2, pady=10)
 
-        # 4. 로그/결과 출력 영역
-        frame_log = tk.LabelFrame(self.root, text="실행 결과 로그", padx=10, pady=10)
+        # 4. 특정 문자 변경 (치환) 영역
+        frame_replace = tk.LabelFrame(self.root, text="4. 특정 문자 변경 (치환)", padx=10, pady=10)
+        frame_replace.pack(fill="x", padx=10, pady=5)
+        
+        tk.Label(frame_replace, text="찾을 문자열:").grid(row=0, column=0, sticky="w", pady=5)
+        self.entry_find = tk.Entry(frame_replace, width=20)
+        self.entry_find.grid(row=0, column=1, padx=5, pady=5)
+        
+        tk.Label(frame_replace, text="바꿀 문자열:").grid(row=0, column=2, sticky="w", pady=5)
+        self.entry_replace = tk.Entry(frame_replace, width=20)
+        self.entry_replace.grid(row=0, column=3, padx=5, pady=5)
+        
+        tk.Button(frame_replace, text="변경 실행", command=self.apply_replace_rename).grid(row=1, column=0, columnspan=4, pady=10)
+
+        # 5. 로그/결과 출력 영역
+        frame_log = tk.LabelFrame(self.root, text="5. 실행 결과 로그", padx=10, pady=10)
         frame_log.pack(fill="both", expand=True, padx=10, pady=5)
         
         self.text_log = tk.Text(frame_log, height=10, state="disabled")
@@ -115,6 +129,36 @@ class FileRenamerApp:
             except Exception as e:
                 self.log_message(f"실패 ({filename}): {e}")
         
+        messagebox.showinfo("완료", f"총 {changed_count}개의 파일 이름이 변경되었다.")
+
+    def apply_replace_rename(self):
+        """파일명에서 특정 문자열을 찾아 다른 문자열로 변경하는 함수"""
+        folder, files = self.get_files_in_folder()
+        if not folder or not files:
+            return
+
+        old_text = self.entry_find.get()
+        new_text = self.entry_replace.get()
+
+        if not old_text:
+            messagebox.showinfo("알림", "찾을 문자열을 입력해야 한다.")
+            return
+
+        changed_count = 0
+        for filename in files:
+            if old_text in filename:
+                new_filename = filename.replace(old_text, new_text)
+                
+                old_path = os.path.join(folder, filename)
+                new_path = os.path.join(folder, new_filename)
+                
+                try:
+                    os.rename(old_path, new_path)
+                    self.log_message(f"변경: {filename} -> {new_filename}")
+                    changed_count += 1
+                except Exception as e:
+                    self.log_message(f"실패 ({filename}): {e}")
+            
         messagebox.showinfo("완료", f"총 {changed_count}개의 파일 이름이 변경되었다.")
 
     def apply_batch_rename(self):
